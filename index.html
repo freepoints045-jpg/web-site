@@ -134,12 +134,8 @@
             const loadingText = document.getElementById("loading-text");
 
             try {
-                // ক্যাশ এড়াতে টাইমস্ট্যাম্পসহ movies.json লোড
                 const response = await fetch("movies.json?v=" + new Date().getTime());
-                
-                if (!response.ok) {
-                    throw new Error("movies.json পাওয়া যায়নি");
-                }
+                if (!response.ok) throw new Error("movies.json পাওয়া যায়নি");
 
                 const movies = await response.json();
                 loadingText.style.display = "none";
@@ -157,7 +153,6 @@
                         <img src="${movie.poster}" alt="${movie.title}" onerror="this.src='https://via.placeholder.com/180x250?text=No+Poster'">
                         <h4>${movie.title}</h4>
                     `;
-                    // ক্লিক করলে কোনো নতুন ট্যাবে বা রিডাইরেক্ট না হয়ে ইন-সাইট প্লে হবে
                     card.onclick = (e) => {
                         e.preventDefault();
                         playMovie(movie.title, movie.embed_url);

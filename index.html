@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>আমার স্ট্রিম পোর্টাল</title>
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0b0f14;
+            color: #e6eaf2;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #00b4cc;
+            margin-bottom: 25px;
+            font-size: 28px;
+        }
+
+        /* ভিডিও প্লেয়ার সেকশন */
+        #player-container {
+            display: none;
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 0 auto 30px auto;
+            max-width: 900px;
+            text-align: center;
+            border: 2px solid #00b4cc;
+            box-shadow: 0 4px 20px rgba(0, 180, 204, 0.2);
+        }
+        .iframe-wrapper {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+            height: 0;
+        }
+        .iframe-wrapper iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 8px;
+            background: #000;
+        }
+        .close-btn {
+            background: #ef4444;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+        .close-btn:hover {
+            background: #dc2626;
+        }
+
+        /* মুভি গ্রিড সেকশন */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 20px;
+            max-width: 1180px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #1e293b;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: #00b4cc;
+            box-shadow: 0 6px 18px rgba(0, 180, 204, 0.3);
+        }
+        .card img {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            border-radius: 5px;
+        }
+        .card h4 {
+            font-size: 14px;
+            margin: 10px 0 5px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #fff;
+        }
+        .loading {
+            text-align: center;
+            color: #00b4cc;
+            font-size: 18px;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎬 আমার স্ট্রিম পোর্টাল</h1>
+
+    <!-- ভিডিও প্লেয়ার -->
+    <div id="player-container">
+        <h3 id="playing-title" style="margin-top:0; color:#00b4cc;">ভিডিও লোড হচ্ছে...</h3>
+        <div class="iframe-wrapper">
+            <iframe id="video-frame" src="" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true"></iframe>
+        </div>
+        <button class="close-btn" onclick="closePlayer()">প্লেয়ার বন্ধ করুন</button>
+    </div>
+
+    <!-- মুভি গ্রিড -->
+    <div id="loading-text" class="loading">মুভি তালিকা লোড হচ্ছে...</div>
+    <div class="grid" id="movie-grid"></div>
+
+    <script>
+        async function loadMovies() {
+            const grid = document.getElementById("movie-grid");
+            const loadingText = document.getElementById("loading-text");
+
+            try {
+                // ক্যাশ এড়াতে টাইমস্ট্যাম্প যোগ করে movies.json লোড করা হচ্ছে
+                const response = await fetch("movies.json?v=" + new Date().getTime());
+                
+                if (!response.ok) {
+                    throw new Error("movies.json পাওয়া যায়নি");
+                }
+
+                const movies = await response.json();
+                loadingText.style.display = "none";
+                grid.innerHTML = "";
+
+                if (movies.length === 0) {
+                    grid.innerHTML = "<p style='text-align:center; grid-column: 1/-1;'>কোনো মুভি পাওয়া যায়নি।</p>";
+                    return;
+                }
+
+                movies.forEach(movie => {
+                    const card = document.createElement("div");
+                    card.className = "card";
+                    card.innerHTML = `
+                        <img src="${movie.poster}" alt="${movie.title}" onerror="this.src='https://via.placeholder.com/180x250?text=No+Poster'">
+                        <h4>${movie.title}</h4>
+                    `;
+                    card.onclick = () => playMovie(movie.title, movie.embed_url);
+                    grid.appendChild(card);
+                });
+            } catch (err) {
+                console.error("Error loading JSON:", err);
+                loadingText.style.color = "#ef4444";
+                loadingText.innerText = "movies.json থেকে তথ্য লোড করা যায়নি! GitHub Action রান করে তৈরি হয়েছে কিনা চেক করুন।";
+            }
+        }
+
+        function playMovie(title, url) {
+            const container = document.getElementById("player-container");
+            const titleElem = document.getElementById("playing-title");
+            const iframe = document.getElementById("video-frame");
+
+            titleElem.innerText = "প্লে হচ্ছে: " + title;
+            iframe.src = url;
+            container.style.display = "block";
+            container.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function closePlayer() {
+            const container = document.getElementById("player-container");
+            const iframe = document.getElementById("video-frame");
+            iframe.src = "";
+            container.style.display = "none";
+        }
+
+        loadMovies();
+    </script>
+
+</body>
+</html>

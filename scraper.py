@@ -1,5 +1,4 @@
 import json
-import re
 from playwright.sync_api import sync_playwright
 
 TARGET_URL = "https://yju7zm.movielinkbd.at/"
@@ -15,9 +14,8 @@ def scrape_movies():
             page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(5000)
 
-            # মুভি কার্ডসমূহ নির্বাচন
             cards = page.query_selector_all(".movie-card, article, .post")
-            for card in cards[:20]: # প্রথম ২০টি মুভি নেবে
+            for card in cards[:20]:
                 img = card.query_selector("img")
                 link = card.query_selector("a")
                 title_elem = card.query_selector(".title, h2, h3")

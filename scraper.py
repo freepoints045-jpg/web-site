@@ -1,4 +1,5 @@
 import json
+import re
 from playwright.sync_api import sync_playwright
 
 TARGET_URL = "https://yju7zm.movielinkbd.at/"
@@ -6,20 +7,23 @@ TARGET_URL = "https://yju7zm.movielinkbd.at/"
 def scrape_movies():
     movies = []
     with sync_playwright() as p:
+        # Browser launch
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
         page = context.new_page()
         
         try:
-            print("Navigating to main page...")
+            print("Fetching main homepage...")
             page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
-            page.wait_for_timeout(5000)
+            page.wait_for_timeout(4000)
 
             cards = page.query_selector_all(".movie-card, article, .post")
-            print(f"Found {len(cards)} movie cards.")
+            print(f"Total movies found on homepage: {len(cards)}")
             
-            # প্রথম ১২টি মুভি স্ক্র্যাপ করা হচ্ছে (টাইমআউট এড়াতে)
-            for card in cards[:12]:
+            # প্রথম ১০টি মুভি স্ক্র্যাপ করা হচ্ছে (Actions-এর টাইমআউট এড়াতে)
+            for card in cards[:10]:
                 img = card.query_selector("img")
                 link = card.query_selector("a")
                 title_elem = card.query_selector(".title, h2, h3")
@@ -32,42 +36,63 @@ def scrape_movies():
                     if movie_page_url and not movie_page_url.startswith("http"):
                         movie_page_url = TARGET_URL.rstrip('/') + '/' + movie_page_url.lstrip('/')
 
-                    print(f"Extracting video link for: {title}")
+                    print(f"Processing: {title}")
                     
-                    # মুভির ভেতরের পেজে প্রবেশ করে iframe src খোঁজা
-                    embed_url = ""
+                    stream_url = ""
+                    detail_page = context.new_page()
+                    
+                    # Pop-up window block
+                    detail_page.on("popup", lambda p_page: p_page.close())
+
+                    # Network request monitor (ভিডিও ফাইল ধরা)
+                    captured_video_url = []
+                    def handle_request(request):
+                        req_url = request.url
+                        if any(ext in req_url for ext in [".mp4", ".m3u8", "master.m3u8"]) and not any(bad in req_url for bad in ["google", "analytics", "doubleclick"]):
+                            captured_video_url.append(req_url)
+
+                    detail_page.on("request", handle_request)
+
                     try:
-                        detail_page = context.new_page()
+                        # Detail page-এ নেভিগেট
                         detail_page.goto(movie_page_url, wait_until="domcontentloaded", timeout=30000)
                         detail_page.wait_for_timeout(3000)
-                        
-                        # পেজের ভেতরের iframe এলিমেন্ট নির্বাচন করা
-                        iframe_elem = detail_page.query_selector("iframe")
-                        if iframe_elem:
-                            embed_url = iframe_elem.get_attribute("src") or ""
-                        
-                        detail_page.close()
-                    except Exception as e:
-                        print(f"Error fetching inner page {movie_page_url}: {e}")
-                        embed_url = movie_page_url
 
-                    if not embed_url:
-                        embed_url = movie_page_url
+                        # ১. নেটওয়ার্ক থেকে যদি ভিডিও লিংক পাওয়া যায়
+                        if captured_video_url:
+                            stream_url = captured_video_url[0]
+
+                        # ২. যদি না পাওয়া যায়, তবে iframe চেক
+                        if not stream_url:
+                            iframe = detail_page.query_selector("iframe")
+                            if iframe:
+                                stream_url = iframe.get_attribute("src") or ""
+
+                        # ৩. রিডাইরেক্ট পেজের জন্য ব্যাকআপ ডাইরেক্ট পেজ ইউআরএল
+                        if not stream_url:
+                            stream_url = movie_page_url
+
+                    except Exception as e:
+                        print(f"Error scraping detail page for {title}: {e}")
+                        stream_url = movie_page_url
+                    finally:
+                        detail_page.close()
 
                     movies.append({
                         "title": title,
                         "poster": poster,
-                        "embed_url": embed_url
+                        "embed_url": stream_url
                     })
+
         except Exception as e:
-            print("Error during scraping:", e)
+            print("General scraping error:", e)
         finally:
             browser.close()
 
     if movies:
         with open("movies.json", "w", encoding="utf-8") as f:
             json.dump(movies, f, ensure_ascii=False, indent=2)
-        print(f"Successfully saved {len(movies)} movies with direct player links.")
+        print(f"Successfully updated movies.json with {len(movies)} movies!")
 
 if __name__ == "__main__":
     scrape_movies()
